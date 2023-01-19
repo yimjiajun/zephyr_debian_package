@@ -1,0 +1,98 @@
+#!/bin/bash
+
+command="$1"
+maintainer="JiaJun Yim"
+maintainer_email="yimjiajun@icloud.com"
+
+function help_display_begin {
+	cat <<-EOF
+
+		usage: eczephyr [${command}]... [OPTION]...
+
+		Nero and Richard application development base on Zephyr Project RTOS.
+		This tool for specific zephyr application projects installation and build.
+
+	EOF
+
+	return
+}
+
+function help_display_end {
+	cat <<-EOF
+		Reports bugs to ${maintainer} <${maintainer_email}>
+
+	EOF
+
+	return
+}
+
+function install_help_display {
+
+	help_display_begin
+	cat <<-EOF
+		Zephyr Application installation.
+
+		The optionals below may be used to select configuration.
+
+		OPTION:
+		    -d, --directory[=PATH]                 Path to install or update application project;
+		                                           'PATH' can be uncreated directory, which will being create an installation.
+
+		    -h, --help                             Prints help information. Use --help for more information.
+
+		    -p, --project[=NAME]                   Project name to install
+
+	EOF
+	help_display_end
+
+	return
+}
+
+function build_help_display {
+
+	help_display_begin
+	cat <<-EOF
+		Zephyr Application build.
+
+	EOF
+	help_display_end
+
+	return
+}
+
+function command_help_display {
+	help_display_begin
+	cat <<-EOF
+		COMMAND:
+		    build                                  Build zephyr application project
+		    install                                Install zephyr application project
+		    help                                   Prints help information.
+
+	EOF
+	help_display_end
+
+	return
+}
+
+function help_display_select {
+	case "$command" in
+		'install')
+			install_help_display
+			;;
+		'build')
+			build_help_display
+			;;
+		'-h'|'--help'|'help')
+			command='COMMAND'
+			command_help_display
+			;;
+		*)
+			echo -e "\033[1;31m'${command}' is not supported!\033[0m" >&2
+			exit 1
+			;;
+	esac
+
+	return
+}
+
+help_display_select
