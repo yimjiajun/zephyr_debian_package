@@ -1,7 +1,27 @@
 #!/bin/bash
 
+prj_default_board="mec1501modular_assy6885"
 lib_path="$(dirname $(readlink -f $0))"
 prj_path=
+prj_name=
+remote_url=
+
+function require_command_check {
+
+	if [ ! -x "$(command -v west)" ]; then
+		echo -e "\033[1;33m'west'\033[0m \033[1;31m command is not found!\033[0m" >&2
+		echo -e "install west (Zephyr's meta tool)" >&1
+		sleep 1
+
+		pip3 install --user -U west; [ $? -gt 0 ] && exit 1
+		echo 'export PATH=~/.local/bin:"$PATH"' >> ~/.bashrc
+		source ~/.bashrc
+
+		echo -e "west installed and source bashrc from series of configurations for the terminal session" >&1
+	fi
+
+	return 0
+}
 
 function command_check {
 	local sup_cmd=('-h' 'help' \
@@ -26,7 +46,7 @@ function command_check {
 }
 
 function process_input {
-	while [[ "$#" -gt 0 ]]; do
+	while [ "$#" -gt 0 ]; do
 		command_check $1;
 
 		if [ "$?" -gt 0 ] && [ "$#" -ne 1 ]; then
@@ -96,13 +116,187 @@ function process_input {
 	return 0
 }
 
-function project_selection {
+function prj_patch_update {
+	local prj_app_dir="$1"
+	local prj_workspace_dir="$2"
+	local prj_zephyr_kernal_dir="$3"
+	local usr_input=
 
-	# if [ -z "${prj_name} ]; then
-	#
-	# fi
+	git -C ${prj_workspace_dir}/${prj_zephyr_kernal_dir} am ../../../${prj_app_dir}/zephyr_patches/patches_v2_7.patch
+
+	while [ "$?" -gt 0 ]; do
+			usr_input=
+
+		while [ -z "$usr_input" ]; do
+			git -C ${prj_workspace_dir}/${prj_zephyr_kernal_dir} status >&1
+			cat <<-EOF
+
+			| y | skip apply this commit      |
+			| n | continue apply this commit  |
+			| q | quit                        |
+			| Q | quit and abort this patches |
+
+			EOF
+			read -p "Enter action on this patches [y|q|n|Q]: " usr_input
+		done
+
+		[[ "$usr_input" = [-yY] ]] &&\
+			git -C ${prj_workspace_dir}/${prj_zephyr_kernal_dir} am --skip >&1
+
+		[[ "$usr_input" = [-nN] ]] &&\
+			git -C ${prj_workspace_dir}/${prj_zephyr_kernal_dir} am --continue >&1
+
+		[ "$usr_input" = 'q' ] && break
+
+		[ "$usr_input" = 'Q' ] &&\
+			 git -C ${prj_workspace_dir}/${prj_zephyr_kernal_dir} am --abort >&1 | break
+
+	done
 
 	return 0
 }
 
+function project_mchp_spi_gen_download {
+	local mec_spi_gen_remote_url="https://github.com/MicrochipTech/CPGZephyrDocs.git"
+	local mec_spi_gen_dir="$1"
+
+	[ -z "$mec_spi_gen_dir" ] &&\
+			echo -e "\033[1;31m error\033[0m: Empty mec spi generator directory" >&2\
+			&& exit 1
+
+	if [ ! -d "${mec_spi_gen_dir}" ]; then
+			git clone --depth 1 ${mec_spi_gen_remote_url} "${mec_spi_gen_dir}"
+			chmod -R +x ${mec_spi_gen_dir}
+	fi
+
+	return 0
+}
+
+function project_clone_init_update {
+	[ -z "${prj_path}" ] && prj_path='.'
+
+	local prj_app_name='ecfw_zephyr'
+	local prj_zephyr_kernal_dir="ecfwwork/zephyr_fork"
+	local prj_workspace_dir="${prj_path}/sandbox_${prj_name}"
+	local prj_app_dir="${prj_workspace_dir}/${prj_app_name}"
+	local mec_spi_gen_dir="${prj_workspace_dir}/CPGZephyrDocs"
+
+	[ -z "${remote_url}" ] &&\
+		echo -e "\033[1;31m error\033[0m: Empty remote url!" >&2 && exit 1
+
+	if [ ! -d "${prj_app_dir}" ]; then
+		git clone ${remote_url} ${prj_app_dir}
+
+		[ "$?" -gt 0 ] &&\
+			echo -e "\033[1;31m error\033[0m: Failed to clone $2" >&2 && exit 1
+	fi
+
+	west init -l ${prj_app_dir}
+
+	if [ "$?" -gt 0 ]; then
+		west list
+		read -t 10 -p "Continue re-initialize west workspace? [y|n] : "
+		[[ "$REPLY" != [-yY] ]] && exit 0
+	fi
+
+	echo -e "\033[1;33m"
+	cat <<-EOF
+
+	+-----------------------------------------
+	 zephyr west workspace setup
+	+-----------------------------------------
+
+	EOF
+	echo -e "\033[0m"
+
+	cd ${prj_workspace_dir}
+	west update -n
+	west config --local zephyr.base ${prj_zephyr_kernal_dir}
+	west config --local zephyr.base-prefer configfile
+	west config --local build.board ${prj_default_board}
+
+	cat <<-EOF
+	+ BASE-PREFER : $(west config --local zephyr.base-prefer)
+	+    MANIFEST : $(west topdir)/$(west config --local manifest.path)
+	+ ZEPHYR BASE : $(west topdir)/$(west config --local zephyr.base)
+	+ ZEPHYR BOARD: $(west config --local build.board)
+
+	EOF
+
+	cd -
+
+	[[ $prj_name = "intel_"* ]] &&\
+		prj_patch_update ${prj_app_dir} ${prj_workspace_dir} ${prj_zephyr_kernal_dir}
+
+	project_mchp_spi_gen_download $mec_spi_gen_dir; [ "$?" -gt 0 ] && return 1
+
+	return 0
+}
+
+function project_selection {
+	local idx_customize_prj='0'
+	local idx_intel_open_ec='1'
+	local idx_intel_member_open_ec='2'
+	local idx_amd_open_ec='3'
+
+	local zephyr_app_prj=(
+		[idx_customize_prj]='customize_project'
+		[idx_intel_open_ec]='intel_open_ec'
+		[idx_intel_member_open_ec]='intel_member_ec'
+		[idx_amd_open_ec]='amd_open_ec'
+	)
+	local zephyr_remote_url=(
+		[idx_customize_prj]=''
+		[idx_intel_open_ec]='https://github.com/intel/ecfw-zephyr.git'
+		[idx_intel_member_open_ec]='https://github.com/intel/ecfw-zephyr.git'
+		[idx_amd_open_ec]='https://github.com/yimjiajun/amd_ecfw.git'
+	)
+
+	local max_app_prj="${#zephyr_app_prj[*]}"
+	local max_app_prj_idx="$(echo $(($max_app_prj - 1)))"
+
+	while [ -z "${prj_name}" ]; do
+		cat <<-EOF
+
+		+---------------------------
+		 zephyr app project
+		+---------------------------
+		EOF
+		for((i = 0; i < $max_app_prj; i++)); do
+			printf "%2d | %s \n" "$i" "${zephyr_app_prj[$i]}"
+		done
+
+		read -t 20 -p "Enter zephyr app project or 'q' to quit [0-${max_app_prj_idx}|q] : "
+
+		if [ ! -z $REPLY ]; then
+			[ $REPLY = 'q' ] && exit 0
+
+			if [[ $REPLY =~ ^[0-9]+$ ]]; then
+				if [ $REPLY -eq $idx_customize_prj ]; then
+					read -t 30 -p "Enter zephyr app project name: " prj_name
+					[ -z ${prj_name} ] &&\
+						echo -e "\033[1;31m error\033[0m: Empty project name!" >&2
+
+					read -t 40 -p "Enter zephyr app project remote url: " remote_url
+					[ -z ${remote_url} ] &&\
+						prj_name= &&\
+						echo -e "\033[1;31m error\033[0m: Empty project url!" >&2
+
+				elif [ $REPLY -lt ${max_app_prj} ]; then
+					prj_name="${zephyr_app_prj[${REPLY}]}"
+					remote_url="${zephyr_remote_url[${REPLY}]}"
+				fi
+			fi
+		fi
+	done
+
+
+	return 0
+}
+
+require_command_check
 process_input $@; [ "$?" -gt 0 ] && exit 1
+project_selection
+project_clone_init_update; [ "$?" -gt 0 ] && exit 1
+
+exit 0

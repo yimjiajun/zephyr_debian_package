@@ -12,8 +12,13 @@ function command_check {
 		command="--help"
 
 	case "$command" in
-		'build'|'-h'|'--help'|'help')
+		'-h'|'--help'|'help')
 			${lib_path}/help ${command}
+			;;
+
+		'build')
+			shift
+			${lib_path}/build $@
 			;;
 
 		'install')
