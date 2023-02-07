@@ -122,7 +122,7 @@ function prj_patch_update {
 	local prj_zephyr_kernal_dir="$3"
 	local usr_input=
 
-	git -C ${prj_workspace_dir}/${prj_zephyr_kernal_dir} am ../../../${prj_app_dir}/zephyr_patches/patches_v2_7.patch
+	git -C ${prj_workspace_dir}/${prj_zephyr_kernal_dir} am ${prj_app_dir}/zephyr_patches/patches_v2_7.patch
 
 	while [ "$?" -gt 0 ]; do
 			usr_input=

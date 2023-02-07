@@ -262,13 +262,16 @@ process_input() {
 					fi
 					;;
 			 *)
-				 [ "$#" -ne 1 ] &&\
-						echo -e "\033[1;31m error\033[0m: '$1' input parameter is unrecognized" >&2 &&\
-						return 1
+				[ "$#" -ne 1 ] &&\
+					echo -e "\033[1;31m error\033[0m: '$1' input parameter is unrecognized" >&2 &&\
+					return 1
 
-				 [[ ! "$1" = "~"* ]] && [[ "$1" != "/"* ]] && zephyr_project_path="${PWD}"
-				 zephyr_project_path=${zephyr_project_path}/$1
-				 ;;
+				if [[ "$1" != '~'* ]] && [[ "$1" != '/'* ]]; then
+					zephyr_project_path="${PWD}/$1"
+				else
+					zephyr_project_path="$1"
+				fi
+				;;
 		esac
 
 		shift
@@ -276,7 +279,7 @@ process_input() {
 
 	[ -z ${zephyr_project_path} ] && zephyr_project_path='.'
 	cd ${zephyr_project_path}
-	[ $board_sel_opt = 'y' ] && boards_select
+	[[ $board_sel_opt = 'y' ]] && boards_select
 
 	return 0
 }
@@ -313,8 +316,7 @@ function board_setup {
 
 user_variable_setup
 script_variable_setup
-process_input $@
-[ "$?" -gt 0 ] && exit 1
+process_input $@; [ "$?" -gt 0 ] && exit 1
 board_setup
 
 [[ ! -z "$set_zephyr_dconfig" ]] &&\

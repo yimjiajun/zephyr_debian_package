@@ -11,7 +11,6 @@ function debian_pacakge_actions_select {
 	local max_cmd_idx="$(echo $(($max_cmd_sup - 1)))"
 	while [[ -z "${cmd_sel}" ]]; do
 		cat <<-EOF >&1
-
 			+----------------------
 			 Debian package control
 			+----------------------
@@ -26,7 +25,6 @@ function debian_pacakge_actions_select {
 
 			[[ ($REPLY =~ ^[0-9]+$) ]] && [ $REPLY -lt ${max_cmd_sup} ] &&\
 				cmd_sel="${commands[$REPLY]}"
-
 		fi
 	done
 
