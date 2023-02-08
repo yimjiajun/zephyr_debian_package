@@ -275,7 +275,7 @@ process_input() {
 				set_zephyr_dconfig="$set_zephyr_dconfig -DCONFIG_ZTEST=y -DCONFIG_ZTEST_NEW_API=y"
 				;;
 			 "-b"|"--boards")
-				if [ "$1" = '-b' ] && [ "$#" -gt 1 ] && [[ "$2" != "-"* ]]; then
+				if [ "$1" = '-b' ] && [ "$#" -gt 1 ] && [[ "$2" != "-"* ]] && [[ "$2" != *'/'* ]]; then
 					zephyr_board="$2"
 					shift
 				else
@@ -298,9 +298,13 @@ process_input() {
 		shift
 	done
 
-	[ -z ${zephyr_project_path} ] && zephyr_project_path='.'
-
-	cd ${zephyr_project_path}
+	if [ -z ${zephyr_project_path} ]; then
+		if [ -d "$(west topdir)/$(west config --local manifest.path)" ]; then
+			zephyr_project_path="$(west topdir)/$(west config --local manifest.path)"
+		else
+			return 1
+		fi
+	fi
 
 	[[ $board_sel_opt = 'y' ]] && boards_select
 
@@ -313,7 +317,7 @@ function board_setup {
 		if [ ! -z "$zephyr_board" ]; then
 			set_zephyr_board="-b $zephyr_board"
 		else	# default board setup by west build.board, providing '-b' is not neccessary
-			zephyr_board="$(west config build.board)"
+			zephyr_board="$(west config --local build.board)"
 		fi
 	else
 		echo -e "\$BOARD defined: \033[1;33m$BOARD\033[0m" >&1
@@ -341,6 +345,7 @@ function board_setup {
 user_variable_setup
 script_variable_setup
 process_input $@; [ "$?" -gt 0 ] && exit 1
+cd ${zephyr_project_path}
 board_setup
 
 [[ ! -z "$set_zephyr_dconfig" ]] &&\

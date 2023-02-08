@@ -1,5 +1,5 @@
 package:eczephyr
-version:0.02
+version:0.03
 architecture:all
 maintainer:Richard Yim
 description:Zephyr Project RTOS Applications
